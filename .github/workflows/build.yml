@@ -5,6 +5,7 @@ on:
     branches: [ "main", "master" ]
     paths-ignore:
       - '**.jar'
+      - 'ERROR_LOG.txt'
   workflow_dispatch:
 
 permissions:
@@ -24,21 +25,19 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Сборка плагина
+      - name: Сборка и сохранение файла
         run: |
-          if ! mvn -B package --file pom.xml > build.log 2>&1; then
-            echo '### Ошибка сборки:' >> \$GITHUB_STEP_SUMMARY
-            echo '```text' >> \$GITHUB_STEP_SUMMARY
-            tail -n 45 build.log >> \$GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-
-      - name: Сохранение готового JAR прямо в файлы
-        run: |
-          cp target/PryatkiPlugin-1.0-SNAPSHOT.jar PryatkiPlugin.jar
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add PryatkiPlugin.jar
-          git commit -m "Build JAR" || true
-          git push
+          if mvn -B package --file pom.xml > ERROR_LOG.txt 2>&1; then
+            rm -f ERROR_LOG.txt
+            cp target/PryatkiPlugin-1.0-SNAPSHOT.jar PryatkiPlugin.jar
+            git add -A
+            git commit -m "Ready JAR" || true
+            git push
+          else
+            git add ERROR_LOG.txt
+            git commit -m "Save error log" || true
+            git push
+            exit 1
+          fi
