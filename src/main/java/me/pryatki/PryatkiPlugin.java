@@ -8,6 +8,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -15,14 +16,13 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
-import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.jetbrains.annotations.NotNull;
 
 import java.time.Duration;
 import java.util.*;
@@ -39,8 +39,12 @@ public class PryatkiPlugin extends JavaPlugin implements Listener, CommandExecut
     @Override
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
-        Objects.requireNonNull(getCommand("pryatki")).setExecutor(this);
-        Objects.requireNonNull(getCommand("nablydat")).setExecutor(this);
+        if (getCommand("pryatki") != null) {
+            getCommand("pryatki").setExecutor(this);
+        }
+        if (getCommand("nablydat") != null) {
+            getCommand("nablydat").setExecutor(this);
+        }
 
         new BukkitRunnable() {
             @Override
@@ -56,15 +60,15 @@ public class PryatkiPlugin extends JavaPlugin implements Listener, CommandExecut
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equalsIgnoreCase("pryatki")) {
             startGame(sender);
             return true;
         }
 
         if (command.getName().equalsIgnoreCase("nablydat")) {
-            if (!(sender instanceof Player player)) return true;
-            toggleSpectate(player);
+            if (!(sender instanceof Player)) return true;
+            toggleSpectate((Player) sender);
             return true;
         }
         return false;
@@ -102,7 +106,7 @@ public class PryatkiPlugin extends JavaPlugin implements Listener, CommandExecut
             if (activePlayers.size() < 2) return;
 
             Collections.shuffle(activePlayers);
-            Player seeker = activePlayers.getFirst();
+            Player seeker = activePlayers.get(0);
             seekerId = seeker.getUniqueId();
 
             setupPlayer(seeker, Color.RED, "ТЫ ИСКАТЕЛЬ", NamedTextColor.RED);
@@ -139,8 +143,10 @@ public class PryatkiPlugin extends JavaPlugin implements Listener, CommandExecut
     private ItemStack createArmorItem(Material material, Color color) {
         ItemStack item = new ItemStack(material);
         LeatherArmorMeta meta = (LeatherArmorMeta) item.getItemMeta();
-        meta.setColor(color);
-        item.setItemMeta(meta);
+        if (meta != null) {
+            meta.setColor(color);
+            item.setItemMeta(meta);
+        }
         return item;
     }
 
@@ -171,12 +177,18 @@ public class PryatkiPlugin extends JavaPlugin implements Listener, CommandExecut
     @EventHandler
     public void onHit(EntityDamageByEntityEvent event) {
         if (!gameRunning || seekerId == null) return;
-        if (!(event.getDamager() instanceof Player seeker) || !seeker.getUniqueId().equals(seekerId)) return;
+        if (!(event.getDamager() instanceof Player)) return;
+        Player seeker = (Player) event.getDamager();
+        if (!seeker.getUniqueId().equals(seekerId)) return;
 
-        if (event.getEntity() instanceof Player hider && hiders.contains(hider.getUniqueId())) {
-            event.setCancelled(true);
-            catchHider(seeker, hider);
-        } else if (event.getEntity() instanceof ArmorStand stand) {
+        if (event.getEntity() instanceof Player) {
+            Player hider = (Player) event.getEntity();
+            if (hiders.contains(hider.getUniqueId())) {
+                event.setCancelled(true);
+                catchHider(seeker, hider);
+            }
+        } else if (event.getEntity() instanceof ArmorStand) {
+            ArmorStand stand = (ArmorStand) event.getEntity();
             for (Map.Entry<UUID, ArmorStand> entry : decoys.entrySet()) {
                 if (entry.getValue().equals(stand)) {
                     event.setCancelled(true);
@@ -237,12 +249,12 @@ public class PryatkiPlugin extends JavaPlugin implements Listener, CommandExecut
             Location hideSpot = player.getLocation().clone();
             savedLocations.put(player.getUniqueId(), hideSpot);
 
-            ArmorStand decoy = hideSpot.getWorld().spawn(hideSpot, ArmorStand.class, stand -> {
-                stand.setBasePlate(false);
-                stand.setArms(true);
-                stand.setGravity(false);
-                stand.customName(Component.text(player.getName(), NamedTextColor.DARK_GRAY));
-                stand.setCustomNameVisible(true);
-                stand.setItem(EquipmentSlot.HEAD, createArmorItem(Material.LEATHER_HELMET, Color.BLACK));
-                stand.setItem(EquipmentSlot.CHEST, createArmorItem(Material.LEATHER_CHESTPLATE, Color.BLACK));
-                stand.setItem(EquipmentSlot.LEGS, createArmorItem(Material.LEATHER_LEGGINGS, Color.BLACK));
+            ArmorStand decoy = (ArmorStand) hideSpot.getWorld().spawnEntity(hideSpot, EntityType.ARMOR_STAND);
+            decoy.setBasePlate(false);
+            decoy.setArms(true);
+            decoy.setGravity(false);
+            decoy.customName(Component.text(player.getName(), NamedTextColor.DARK_GRAY));
+            decoy.setCustomNameVisible(true);
+
+            EntityEquipment equip = decoy.getEquipment();
+            if (equip != null) {
