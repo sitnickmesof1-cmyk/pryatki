@@ -3,7 +3,12 @@ name: Build Plugin
 on:
   push:
     branches: [ "main", "master" ]
+    paths-ignore:
+      - '**.jar'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -13,18 +18,27 @@ jobs:
       - name: Скачивание кода
         uses: actions/checkout@v4
 
-      - name: Установка Java 21
+      - name: Установка Java
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: maven
 
-      - name: Сборка плагина через Maven
-        run: mvn -B package --file pom.xml
+      - name: Сборка плагина
+        run: |
+          if ! mvn -B package --file pom.xml > build.log 2>&1; then
+            echo '### Ошибка сборки:' >> \$GITHUB_STEP_SUMMARY
+            echo '```text' >> \$GITHUB_STEP_SUMMARY
+            tail -n 45 build.log >> \$GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
-      - name: Выгрузка готового JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: PryatkiPlugin
-          path: target/PryatkiPlugin-1.0-SNAPSHOT.jar
+      - name: Сохранение готового JAR прямо в файлы
+        run: |
+          cp target/PryatkiPlugin-1.0-SNAPSHOT.jar PryatkiPlugin.jar
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add PryatkiPlugin.jar
+          git commit -m "Build JAR" || true
+          git push
